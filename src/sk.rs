@@ -16,12 +16,19 @@ pub struct SecretKey<const H: usize, const S: usize, const D: usize> {
     pub(crate) precomputation: SecretPrecomputation<H, S>,
 }
 
-impl<const H: usize, const UNSAT_H: usize, const S: usize, const D: usize, const Q: usize>
-    SecretKey<H, S, D>
+impl<
+    const H: usize,
+    const H_UNSAT: usize,
+    const S: usize,
+    const S_UNSAT: usize,
+    const D: usize,
+    const Q: usize,
+> SecretKey<H, S, D>
 where
     Uint<H>: Concat<Output = Uint<S>>,
-    Odd<Uint<H>>: PrecomputeInverter<Inverter = SafeGcdInverter<H, UNSAT_H>>,
+    Odd<Uint<H>>: PrecomputeInverter<Inverter = SafeGcdInverter<H, H_UNSAT>>,
     Uint<S>: Split<Output = Uint<H>> + Concat<Output = Uint<D>>,
+    Odd<Uint<S>>: PrecomputeInverter<Inverter = SafeGcdInverter<S, S_UNSAT>>,
     Uint<D>: Split<Output = Uint<S>> + Concat<Output = Uint<Q>>,
     Uint<Q>: Split<Output = Uint<D>>,
 {

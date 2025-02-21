@@ -1,12 +1,12 @@
 use crate::sk::SecretKey;
 use crypto_bigint::modular::{MontyForm, SafeGcdInverter};
-use crypto_bigint::{Concat, Odd, PrecomputeInverter, Split, Uint};
+use crypto_bigint::{Concat, NonZero, Odd, PrecomputeInverter, Split, Uint};
 
-impl<const H: usize, const UNSAT_H: usize, const S: usize, const D: usize, const Q: usize>
+impl<const H: usize, const H_UNSAT: usize, const S: usize, const D: usize, const Q: usize>
     SecretKey<H, S, D>
 where
     Uint<H>: Concat<Output = Uint<S>>,
-    Odd<Uint<H>>: PrecomputeInverter<Inverter = SafeGcdInverter<H, UNSAT_H>>,
+    Odd<Uint<H>>: PrecomputeInverter<Inverter = SafeGcdInverter<H, H_UNSAT>>,
     Uint<S>: Split<Output = Uint<H>> + Concat<Output = Uint<D>>,
     Uint<D>: Split<Output = Uint<S>> + Concat<Output = Uint<Q>>,
     Uint<Q>: Split<Output = Uint<D>>,
@@ -18,6 +18,25 @@ where
         let mq = lq.mul_mod(&self.precomputation.hq, self.q.as_nz_ref());
 
         self.crt(&mp, &mq)
+    }
+
+    pub fn open(&self, c: &Uint<D>) -> (Uint<S>, NonZero<Uint<S>>) {
+        let cp_reduced = c
+            .rem(&self.p.resize().to_nz().expect("p is non zero"))
+            .resize();
+        let cp_monty_form = MontyForm::new(&cp_reduced, self.precomputation.p_monty_params);
+        let rp = cp_monty_form.pow(&self.precomputation.np_inv).retrieve();
+
+        let cq_reduced = c
+            .rem(&self.q.resize().to_nz().expect("q is non zero"))
+            .resize();
+        let cq_monty_form = MontyForm::new(&cq_reduced, self.precomputation.q_monty_params);
+        let rq = cq_monty_form.pow(&self.precomputation.nq_inv).retrieve();
+
+        let p = self.decrypt(c);
+        let r = self.crt(&rp, &rq).to_nz().expect("r is non zero");
+
+        (p, r)
     }
 
     fn fermat_quotient_p(&self, x: &Uint<D>) -> Uint<H> {
@@ -90,7 +109,8 @@ mod tests {
         let r = U4096::from_be_hex("3f4bf4540a70cf80777c67ce6d5d44f9177af18d6bbd0e79ddfb26827c71244222bb013971f9699dc48e02c3e8e1215d56e6615f23738903c623db15492e23289f6d9d65f648b32449ec01b944ab448c557f484b1b4e635c4e074ed900ee25fa9c9a92691b8aa385dba45dfc00d1e2dacf90cf5c8652e17fba28477efaf0534d52227110b1e9cdde6f02b9917cf830d82fef5beaafb042273c376796c91b04b8b3ce5ab6144cef662ea4f9a959d8216ab69bc41e5f2af970078726491b5bebf2d9f25c75af8da5fcab7e82ce2ada37611a329f23e2f5e7ce6977dec8fd305df261231d09ee3ad2a51c442aef884d9a327d9825cfa8ac3c75f6eee934557c7c13d00e427ad869530afd14b2604b729f6dd1310ed40936e0121f6356132002910d68a1694cb742f2932a73ced8460ab8998dd3422ceeeae91a89f8dd26aa272f705104f50f626f23f9618f0162c8bea3bf64da29aeecf924ace9c1a2a45a942ea6b71b8c13f46861b206b492329f1fe90343b143373272e030e0983ebc584c49637f76f4461b5b806cb543f03696eeaf47e52ad8e59274a47e8e097e5ea293d98041b877574ce9715d95a652ab9e0c300b0bcf1a1ba247b51b51d190c0bc48b9752c85b555b717ba26a2e1edbe97af4b704fe948d040842aac10eb2670a583460091dcd807b2e77ad20dada992962f28e3313e1e40a6814a6cf0ff81a6fd25d16d").to_nz().unwrap();
         let c = pk.encrypt_with_nonce(&m, &r);
 
-        let d = sk.decrypt(&c);
-        assert_eq!(m, d);
+        let (m2, r2) = sk.open(&c);
+        assert_eq!(m, m2);
+        assert_eq!(r, r2);
     }
 }

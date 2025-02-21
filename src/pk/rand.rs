@@ -39,9 +39,10 @@ mod tests {
         let pk = sk.as_public_key();
 
         let m = pk.random_plaintext(&mut rng);
-        let (c, _) = pk.encrypt_with_rng(&m, &mut rng);
+        let (c, r) = pk.encrypt_with_rng(&m, &mut rng);
 
-        let d = sk.decrypt(&c);
-        assert_eq!(m, d);
+        let (m2, r2) = sk.open(&c);
+        assert_eq!(m, m2);
+        assert_eq!(r, r2);
     }
 }
