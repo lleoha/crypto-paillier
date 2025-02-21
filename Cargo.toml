@@ -1,8 +1,8 @@
 [package]
 name = "crypto-paillier"
-version = "0.0.1-pre.1"
-edition = "2021"
-rust-version = "1.84"
+version = "0.0.1-pre.2"
+edition = "2024"
+rust-version = "1.85"
 
 repository = "https://github.com/lleoha/crypto-paillier"
 description = "TBD"

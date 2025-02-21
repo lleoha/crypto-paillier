@@ -28,8 +28,8 @@ where
 #[cfg(test)]
 mod tests {
     use crate::PaillierSecretKey2048;
-    use rand_chacha::rand_core::SeedableRng;
     use rand_chacha::ChaCha8Rng;
+    use rand_chacha::rand_core::SeedableRng;
 
     #[test]
     fn should_generate_random_key() {
