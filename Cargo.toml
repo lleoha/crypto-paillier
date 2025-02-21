@@ -1,6 +1,6 @@
 [package]
 name = "crypto-paillier"
-version = "0.0.1-pre.0"
+version = "0.0.1-pre.1"
 edition = "2021"
 rust-version = "1.84"
 
@@ -8,8 +8,12 @@ repository = "https://github.com/lleoha/crypto-paillier"
 description = "TBD"
 license = "Apache-2.0 OR MIT"
 categories = ["algorithms", "cryptography", "mathematics"]
-keywords = ["crypto", "paillier", "homomorphic", "encryption"]
+keywords = ["cryptography", "paillier", "homomorphic", "cipher", "encryption"]
 readme = "README.md"
 
 [dependencies]
 crypto-bigint = { version = "0.6.1", features = ["rand_core"] }
+crypto-primes = { version = "0.6.1" }
+
+[dev-dependencies]
+rand_chacha = { version = "0.3.1" }
