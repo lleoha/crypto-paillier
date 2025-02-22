@@ -1,3 +1,4 @@
+use crate::utils::{odd_widening_mul, odd_widening_square};
 use crypto_bigint::modular::{MontyParams, SafeGcdInverter};
 use crypto_bigint::{Concat, Odd, PrecomputeInverter, Split, Uint};
 
@@ -28,11 +29,11 @@ where
     Uint<D>: Split<Output = Uint<S>>,
 {
     pub fn new(p: &Odd<Uint<H>>, q: &Odd<Uint<H>>) -> Self {
-        let n = p.widening_mul(q).to_odd().expect("n is odd");
+        let n = odd_widening_mul(p, q);
 
         let p_monty_params = MontyParams::new(p.to_owned());
         let pm1 = p.wrapping_sub(&Uint::ONE);
-        let pp = p.widening_square().to_odd().expect("p^2 is odd");
+        let pp = odd_widening_square(p);
         let pp_monty_params = MontyParams::new(pp);
         let n_pp_reduced = n.rem(pp.as_nz_ref());
         let (hp_inv, _) = Uint::ONE
@@ -44,7 +45,7 @@ where
 
         let q_monty_params = MontyParams::new(q.to_owned());
         let qm1 = q.wrapping_sub(&Uint::ONE);
-        let qq = q.widening_square().to_odd().expect("q^2 is odd");
+        let qq = odd_widening_square(q);
         let qq_monty_params = MontyParams::new(qq);
         let n_qq_reduced = n.rem(qq.as_nz_ref());
         let (hq_inv, _) = Uint::ONE

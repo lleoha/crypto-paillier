@@ -72,10 +72,10 @@ where
     Uint<D>: Split<Output = Uint<S>> + Concat<Output = Uint<Q>>,
     Uint<Q>: Split<Output = Uint<D>>,
 {
-    type Ciphertext = Uint<D>;
+    type Ciphertext = NonZero<Uint<D>>;
     type Nonce = NonZero<Uint<S>>;
 
-    fn decrypt(&self, c: &Uint<D>) -> Uint<S> {
+    fn decrypt(&self, c: &NonZero<Uint<D>>) -> Uint<S> {
         let lp = self.fermat_quotient_p(c);
         let mp = lp.mul_mod(&self.precomputation.hp, self.p.as_nz_ref());
         let lq = self.fermat_quotient_q(c);
@@ -84,7 +84,7 @@ where
         self.crt(&mp, &mq)
     }
 
-    fn open(&self, c: &Uint<D>) -> (Uint<S>, NonZero<Uint<S>>) {
+    fn open(&self, c: &NonZero<Uint<D>>) -> (Uint<S>, NonZero<Uint<S>>) {
         let cp_reduced = c
             .rem(&self.p.resize().to_nz().expect("p is non zero"))
             .resize();

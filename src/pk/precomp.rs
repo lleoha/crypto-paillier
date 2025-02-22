@@ -1,3 +1,4 @@
+use crate::utils::odd_widening_square;
 use crypto_bigint::modular::MontyParams;
 use crypto_bigint::{Concat, Odd, Split, Uint};
 
@@ -15,7 +16,7 @@ where
 {
     pub(crate) fn new(n: &Odd<Uint<S>>) -> Self {
         let n_monty_params = MontyParams::new(n.to_owned());
-        let nn = n.widening_square().to_odd().expect("n^2 is odd");
+        let nn = odd_widening_square(n);
         let nn_monty_params = MontyParams::new(nn);
 
         PublicPrecomputation {

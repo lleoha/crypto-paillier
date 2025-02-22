@@ -1,7 +1,8 @@
 use crate::pk::PublicKey;
 use crate::traits::HomomorphicEncryptionKey;
+use crate::utils::nz_mul_mod;
 use crypto_bigint::modular::{MontyForm, SafeGcdInverter};
-use crypto_bigint::{Concat, Odd, PrecomputeInverter, Split, Uint};
+use crypto_bigint::{Concat, NonZero, Odd, PrecomputeInverter, Split, Uint};
 
 impl<const S: usize, const S_UNSAT: usize, const D: usize, const D_UNSAT: usize, const Q: usize>
     HomomorphicEncryptionKey<Uint<S>> for PublicKey<S, D>
@@ -15,22 +16,20 @@ where
     type Scalar = Uint<S>;
 
     fn ciphertext_add(&self, cl: &Self::Ciphertext, cr: &Self::Ciphertext) -> Self::Ciphertext {
-        cl.mul_mod(
+        nz_mul_mod(
+            cl,
             cr,
             self.precomputation.nn_monty_params.modulus().as_nz_ref(),
         )
-        .to_nz()
-        .expect("c is non zero")
     }
 
     fn ciphertext_add_plain(&self, c: &Self::Ciphertext, m: &Uint<S>) -> Self::Ciphertext {
-        let g_to_m = self.n.widening_mul(m) + Uint::ONE;
-        c.mul_mod(
+        let g_to_m = NonZero::new(self.n.widening_mul(m) + Uint::ONE).unwrap();
+        nz_mul_mod(
+            c,
             &g_to_m,
             self.precomputation.nn_monty_params.modulus().as_nz_ref(),
         )
-        .to_nz()
-        .expect("c is non zero")
     }
 
     fn ciphertext_sub(&self, cl: &Self::Ciphertext, cr: &Self::Ciphertext) -> Self::Ciphertext {

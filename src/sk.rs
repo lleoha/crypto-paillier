@@ -3,6 +3,7 @@ mod precomp;
 
 use crate::pk::PublicKey;
 use crate::sk::precomp::SecretPrecomputation;
+use crate::utils::odd_widening_mul;
 use crypto_bigint::modular::SafeGcdInverter;
 use crypto_bigint::rand_core::CryptoRngCore;
 use crypto_bigint::{Concat, Odd, PrecomputeInverter, Split, Uint};
@@ -61,7 +62,7 @@ where
     }
 
     pub fn from_primes_unchecked(p: Odd<Uint<H>>, q: Odd<Uint<H>>) -> Self {
-        let n = p.widening_mul(&q).to_odd().expect("n is odd");
+        let n = odd_widening_mul(&p, &q);
         let pk = PublicKey::from_n_unchecked(n);
         let precomputation = SecretPrecomputation::new(&p, &q);
 

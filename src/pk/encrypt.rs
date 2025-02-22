@@ -1,6 +1,7 @@
 use crate::pk::PublicKey;
 use crate::traits::EncryptionKey;
-use crypto_bigint::modular::{MontyForm, SafeGcdInverter};
+use crate::utils::{nz_mul_mod, nz_pow_mod, nz_resize};
+use crypto_bigint::modular::SafeGcdInverter;
 use crypto_bigint::rand_core::RngCore;
 use crypto_bigint::{Concat, NonZero, Odd, PrecomputeInverter, Split, Uint};
 
@@ -18,17 +19,18 @@ where
     fn encrypt_with_nonce(&self, m: &Uint<S>, r: &NonZero<Uint<S>>) -> NonZero<Uint<D>> {
         // TODO(mkk): check r < n, check gcd(r, n) == 1
 
-        let g_to_m = self.n.widening_mul(m) + Uint::ONE;
-        let r_monty_form = MontyForm::new(&r.resize(), self.precomputation.nn_monty_params);
-        let r_to_n = r_monty_form.pow(&self.n).retrieve();
+        let g_to_m = NonZero::new(self.n.widening_mul(m) + Uint::ONE).unwrap();
+        let r_to_n = nz_pow_mod(
+            &nz_resize(r),
+            self.n.as_nz_ref(),
+            &self.precomputation.nn_monty_params,
+        );
 
-        g_to_m
-            .mul_mod(
-                &r_to_n,
-                self.precomputation.nn_monty_params.modulus().as_nz_ref(),
-            )
-            .to_nz()
-            .expect("c is non zero")
+        nz_mul_mod(
+            &g_to_m,
+            &r_to_n,
+            self.precomputation.nn_monty_params.modulus().as_nz_ref(),
+        )
     }
 
     fn encrypt<R: RngCore + ?Sized>(
