@@ -28,6 +28,7 @@ where
 #[cfg(test)]
 mod tests {
     use crate::PaillierSecretKey2048;
+    use crate::{DecryptionKey, EncryptionKey};
     use rand_chacha::ChaCha8Rng;
     use rand_chacha::rand_core::SeedableRng;
 
@@ -39,7 +40,7 @@ mod tests {
         let pk = sk.as_public_key();
 
         let m = pk.random_plaintext(&mut rng);
-        let (c, r) = pk.encrypt_with_rng(&m, &mut rng);
+        let (c, r) = pk.encrypt(&m, &mut rng);
 
         let (m2, r2) = sk.open(&c);
         assert_eq!(m, m2);

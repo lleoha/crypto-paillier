@@ -1,4 +1,4 @@
-mod dec;
+mod decrypt;
 mod precomp;
 
 use crate::pk::PublicKey;

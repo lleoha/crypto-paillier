@@ -1,4 +1,5 @@
-mod enc;
+mod encrypt;
+mod homomorphic;
 mod precomp;
 mod rand;
 
@@ -8,7 +9,7 @@ use crypto_bigint::{Concat, Odd, Split, Uint};
 #[derive(Debug, Copy, Clone)]
 pub struct PublicKey<const S: usize, const D: usize> {
     pub(crate) n: Odd<Uint<S>>,
-    pub(crate) precomputation: PublicPrecomputation<D>,
+    pub(crate) precomputation: PublicPrecomputation<S, D>,
 }
 
 impl<const S: usize, const D: usize, const Q: usize> PublicKey<S, D>

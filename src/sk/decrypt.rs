@@ -1,4 +1,5 @@
 use crate::sk::SecretKey;
+use crate::traits::DecryptionKey;
 use crypto_bigint::modular::{MontyForm, SafeGcdInverter};
 use crypto_bigint::{Concat, NonZero, Odd, PrecomputeInverter, Split, Uint};
 
@@ -11,34 +12,6 @@ where
     Uint<D>: Split<Output = Uint<S>> + Concat<Output = Uint<Q>>,
     Uint<Q>: Split<Output = Uint<D>>,
 {
-    pub fn decrypt(&self, c: &Uint<D>) -> Uint<S> {
-        let lp = self.fermat_quotient_p(c);
-        let mp = lp.mul_mod(&self.precomputation.hp, self.p.as_nz_ref());
-        let lq = self.fermat_quotient_q(c);
-        let mq = lq.mul_mod(&self.precomputation.hq, self.q.as_nz_ref());
-
-        self.crt(&mp, &mq)
-    }
-
-    pub fn open(&self, c: &Uint<D>) -> (Uint<S>, NonZero<Uint<S>>) {
-        let cp_reduced = c
-            .rem(&self.p.resize().to_nz().expect("p is non zero"))
-            .resize();
-        let cp_monty_form = MontyForm::new(&cp_reduced, self.precomputation.p_monty_params);
-        let rp = cp_monty_form.pow(&self.precomputation.np_inv).retrieve();
-
-        let cq_reduced = c
-            .rem(&self.q.resize().to_nz().expect("q is non zero"))
-            .resize();
-        let cq_monty_form = MontyForm::new(&cq_reduced, self.precomputation.q_monty_params);
-        let rq = cq_monty_form.pow(&self.precomputation.nq_inv).retrieve();
-
-        let p = self.decrypt(c);
-        let r = self.crt(&rp, &rq).to_nz().expect("r is non zero");
-
-        (p, r)
-    }
-
     fn fermat_quotient_p(&self, x: &Uint<D>) -> Uint<H> {
         let x_reduced = x
             .rem(
@@ -90,9 +63,51 @@ where
     }
 }
 
+impl<const H: usize, const H_UNSAT: usize, const S: usize, const D: usize, const Q: usize>
+    DecryptionKey<Uint<S>> for SecretKey<H, S, D>
+where
+    Uint<H>: Concat<Output = Uint<S>>,
+    Odd<Uint<H>>: PrecomputeInverter<Inverter = SafeGcdInverter<H, H_UNSAT>>,
+    Uint<S>: Split<Output = Uint<H>> + Concat<Output = Uint<D>>,
+    Uint<D>: Split<Output = Uint<S>> + Concat<Output = Uint<Q>>,
+    Uint<Q>: Split<Output = Uint<D>>,
+{
+    type Ciphertext = Uint<D>;
+    type Nonce = NonZero<Uint<S>>;
+
+    fn decrypt(&self, c: &Uint<D>) -> Uint<S> {
+        let lp = self.fermat_quotient_p(c);
+        let mp = lp.mul_mod(&self.precomputation.hp, self.p.as_nz_ref());
+        let lq = self.fermat_quotient_q(c);
+        let mq = lq.mul_mod(&self.precomputation.hq, self.q.as_nz_ref());
+
+        self.crt(&mp, &mq)
+    }
+
+    fn open(&self, c: &Uint<D>) -> (Uint<S>, NonZero<Uint<S>>) {
+        let cp_reduced = c
+            .rem(&self.p.resize().to_nz().expect("p is non zero"))
+            .resize();
+        let cp_monty_form = MontyForm::new(&cp_reduced, self.precomputation.p_monty_params);
+        let rp = cp_monty_form.pow(&self.precomputation.np_inv).retrieve();
+
+        let cq_reduced = c
+            .rem(&self.q.resize().to_nz().expect("q is non zero"))
+            .resize();
+        let cq_monty_form = MontyForm::new(&cq_reduced, self.precomputation.q_monty_params);
+        let rq = cq_monty_form.pow(&self.precomputation.nq_inv).retrieve();
+
+        let p = self.decrypt(c);
+        let r = self.crt(&rp, &rq).to_nz().expect("r is non zero");
+
+        (p, r)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::PaillierSecretKey4096;
+    use crate::{DecryptionKey, EncryptionKey};
     use crypto_bigint::{U2048, U4096};
 
     #[test]
