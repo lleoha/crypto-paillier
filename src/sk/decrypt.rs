@@ -1,5 +1,6 @@
 use crate::sk::SecretKey;
 use crate::traits::DecryptionKey;
+use crate::utils::{wide_div, wide_rem, wider_rem};
 use crypto_bigint::modular::{MontyForm, SafeGcdInverter};
 use crypto_bigint::{Concat, NonZero, Odd, PrecomputeInverter, Split, Uint};
 
@@ -13,43 +14,21 @@ where
     Uint<Q>: Split<Output = Uint<D>>,
 {
     fn fermat_quotient_p(&self, x: &Uint<D>) -> Uint<H> {
-        let x_reduced = x
-            .rem(
-                &self
-                    .precomputation
-                    .pp_monty_params
-                    .modulus()
-                    .resize()
-                    .to_nz()
-                    .expect("p^2 is non zero"),
-            )
-            .resize();
+        let x_reduced = wide_rem(x, self.precomputation.pp_monty_params.modulus().as_nz_ref());
         let x_monty_form = MontyForm::new(&x_reduced, self.precomputation.pp_monty_params);
-        let x_to_pm1 = x_monty_form.pow(&self.precomputation.pm1);
-        let nom = x_to_pm1.retrieve() - Uint::ONE;
+        let x_to_pm1 = x_monty_form.pow(&self.precomputation.pm1).retrieve();
+        let nom = x_to_pm1 - Uint::ONE;
 
-        nom.wrapping_div(&self.p.resize().to_nz().expect("p is non zero"))
-            .resize()
+        wide_div(&nom, self.p.as_nz_ref())
     }
 
     fn fermat_quotient_q(&self, x: &Uint<D>) -> Uint<H> {
-        let x_reduced = x
-            .rem(
-                &self
-                    .precomputation
-                    .qq_monty_params
-                    .modulus()
-                    .resize()
-                    .to_nz()
-                    .expect("q^2 is non zero"),
-            )
-            .resize();
+        let x_reduced = wide_rem(x, self.precomputation.qq_monty_params.modulus().as_nz_ref());
         let x_monty_form = MontyForm::new(&x_reduced, self.precomputation.qq_monty_params);
         let x_to_qm1 = x_monty_form.pow(&self.precomputation.qm1);
         let nom = x_to_qm1.retrieve() - Uint::ONE;
 
-        nom.wrapping_div(&self.q.resize().to_nz().expect("q is non zero"))
-            .resize()
+        wide_div(&nom, self.q.as_nz_ref())
     }
 
     fn crt(&self, mp: &Uint<H>, mq: &Uint<H>) -> Uint<S> {
@@ -75,7 +54,7 @@ where
     type Ciphertext = NonZero<Uint<D>>;
     type Nonce = NonZero<Uint<S>>;
 
-    fn decrypt(&self, c: &NonZero<Uint<D>>) -> Uint<S> {
+    fn decrypt(&self, c: &Self::Ciphertext) -> Uint<S> {
         let lp = self.fermat_quotient_p(c);
         let mp = lp.mul_mod(&self.precomputation.hp, self.p.as_nz_ref());
         let lq = self.fermat_quotient_q(c);
@@ -84,16 +63,12 @@ where
         self.crt(&mp, &mq)
     }
 
-    fn open(&self, c: &NonZero<Uint<D>>) -> (Uint<S>, NonZero<Uint<S>>) {
-        let cp_reduced = c
-            .rem(&self.p.resize().to_nz().expect("p is non zero"))
-            .resize();
+    fn open(&self, c: &Self::Ciphertext) -> (Uint<S>, Self::Nonce) {
+        let cp_reduced = wider_rem(c.as_ref(), self.p.as_nz_ref());
         let cp_monty_form = MontyForm::new(&cp_reduced, self.precomputation.p_monty_params);
         let rp = cp_monty_form.pow(&self.precomputation.np_inv).retrieve();
 
-        let cq_reduced = c
-            .rem(&self.q.resize().to_nz().expect("q is non zero"))
-            .resize();
+        let cq_reduced = wider_rem(c.as_ref(), self.q.as_nz_ref());
         let cq_monty_form = MontyForm::new(&cq_reduced, self.precomputation.q_monty_params);
         let rq = cq_monty_form.pow(&self.precomputation.nq_inv).retrieve();
 
@@ -109,13 +84,17 @@ mod tests {
     use crate::PaillierSecretKey4096;
     use crate::{DecryptionKey, EncryptionKey};
     use crypto_bigint::{U2048, U4096};
+    use rand_chacha::ChaCha8Rng;
+    use rand_chacha::rand_core::SeedableRng;
 
     #[test]
     fn should_decrypt() {
+        let mut rng = ChaCha8Rng::from_entropy();
+
         let p = U2048::from_be_hex("b15323be74f87cbf9a8abd8d24ccf5ae67e96dafe0a8030f83b7a1fbb2c664191a7667dea5dff9130f25f71ca3af40aaf27cbd196493760a29be84b6b757532543989a9580de7eadb8437bd2f88e4a501224948e5d522c8e6dac3fc50bda19233e5d01954fa67909706583952b2693a487d65b6fbc7a1f953501c09f7aef44db2a8698d06d18c41473ebc3cdadc08b6bc38a0c7e0e280277c90048aab8566c4606717d54564e519437e1e18557a76a34831c132f3b3f225852cd0d7f2ed7371ebdf947e73c5041ea23874302507a4dd84e3bfc9636182bdd75931ce050d7cc88883b6b3831b408af3c64eecf192ada2b265cb07da8c7e8c5dd46c3c633162e19").to_odd().unwrap();
         let q = U2048::from_be_hex("8d97ae14c81df11cdea81c4b9c2579a8e161e71ac5df7d6d4a8340edc8db44ad16b15f62c45df91906e33cd1afb845d4217cd37fd69e3d9c1d7f7eeee93953b61a299925d34806725a2ddf0f0e7a39888d1b6dc291d59b1d86b9be209a486d810fe3c59d3619d8f4c73994d3a4ebac52efabcce73aaaa263603797929bf11dc71ce740c878406009d60950e75db2cc741083afa4831ad4bdc79f6528bd808169f5763790a43df217cc3ec159717d11f82481d7dd864f082de499405522c24f340b52b39366a5d6d6714303338f26345bb58dab33974fc014bd14e35acabf815efcae58737ca60ff9f27c219906bacb98b9ae47a7fb64c7c59c7df254f5243175").to_odd().unwrap();
 
-        let sk = PaillierSecretKey4096::from_primes_unchecked(p, q);
+        let sk = PaillierSecretKey4096::from_primes(p, q, &mut rng);
 
         let pk = sk.as_public_key();
         let m = U4096::from_be_hex(

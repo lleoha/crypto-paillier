@@ -16,7 +16,7 @@ where
     type Ciphertext = NonZero<Uint<D>>;
     type Nonce = NonZero<Uint<S>>;
 
-    fn encrypt_with_nonce(&self, m: &Uint<S>, r: &NonZero<Uint<S>>) -> NonZero<Uint<D>> {
+    fn encrypt_with_nonce(&self, m: &Uint<S>, r: &Self::Nonce) -> Self::Ciphertext {
         // TODO(mkk): check r < n, check gcd(r, n) == 1
 
         let g_to_m = NonZero::new(self.n.widening_mul(m) + Uint::ONE).unwrap();
@@ -37,7 +37,7 @@ where
         &self,
         m: &Uint<S>,
         rng: &mut R,
-    ) -> (NonZero<Uint<D>>, NonZero<Uint<S>>) {
+    ) -> (Self::Ciphertext, Self::Nonce) {
         let r = self.random_nonce(rng);
         let c = self.encrypt_with_nonce(m, &r);
         (c, r)

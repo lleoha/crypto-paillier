@@ -36,11 +36,12 @@ where
         let pp = odd_widening_square(p);
         let pp_monty_params = MontyParams::new(pp);
         let n_pp_reduced = n.rem(pp.as_nz_ref());
-        let (hp_inv, _) = Uint::ONE
+        let hp_inv = Uint::ONE
             .sub_mod(&n_pp_reduced, &pp)
             .wrapping_sub(&Uint::ONE)
             .wrapping_div(&p.resize().to_nz().expect("p is non zero"))
-            .split();
+            .split()
+            .0;
         let hp = hp_inv.inv_odd_mod(p).expect("hp is invertible");
 
         let q_monty_params = MontyParams::new(q.to_owned());
@@ -48,11 +49,12 @@ where
         let qq = odd_widening_square(q);
         let qq_monty_params = MontyParams::new(qq);
         let n_qq_reduced = n.rem(qq.as_nz_ref());
-        let (hq_inv, _) = Uint::ONE
+        let hq_inv = Uint::ONE
             .sub_mod(&n_qq_reduced, &qq)
             .wrapping_sub(&Uint::ONE)
             .wrapping_div(&q.resize().to_nz().expect("q is non zero"))
-            .split();
+            .split()
+            .0;
         let hq = hq_inv.inv_odd_mod(q).expect("hq is invertible");
         let q_inv = q.inv_odd_mod(p).expect("q is invertible");
 
