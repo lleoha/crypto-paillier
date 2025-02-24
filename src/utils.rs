@@ -1,10 +1,7 @@
 use crypto_bigint::modular::{MontyForm, MontyParams};
 use crypto_bigint::{Concat, NonZero, Odd, Split, Uint};
 
-pub(crate) fn odd_widening_mul<const L: usize, const LL: usize>(
-    x: &Odd<Uint<L>>,
-    y: &Odd<Uint<L>>,
-) -> Odd<Uint<LL>>
+pub(crate) fn odd_widening_mul<const L: usize, const LL: usize>(x: &Odd<Uint<L>>, y: &Odd<Uint<L>>) -> Odd<Uint<LL>>
 where
     Uint<L>: Concat<Output = Uint<LL>>,
     Uint<LL>: Split<Output = Uint<L>>,
@@ -13,9 +10,7 @@ where
     x.widening_mul(y).to_odd().unwrap()
 }
 
-pub(crate) fn odd_widening_square<const L: usize, const LL: usize>(
-    x: &Odd<Uint<L>>,
-) -> Odd<Uint<LL>>
+pub(crate) fn odd_widening_square<const L: usize, const LL: usize>(x: &Odd<Uint<L>>) -> Odd<Uint<LL>>
 where
     Uint<L>: Concat<Output = Uint<LL>>,
     Uint<LL>: Split<Output = Uint<L>>,
@@ -33,13 +28,9 @@ where
     Uint<L>: Concat<Output = Uint<LL>>,
     Uint<LL>: Split<Output = Uint<L>>,
 {
-    // x.mul_mod(y, m).to_nz().unwrap()
-    // taking remainder is much faster
+    // x.mul_mod(y, m).to_nz().unwrap() //taking remainder is faster
     let z = x.widening_mul(y);
-    z.rem(&m.resize().to_nz().unwrap())
-        .resize()
-        .to_nz()
-        .unwrap()
+    z.rem(&m.resize().to_nz().unwrap()).resize().to_nz().unwrap()
 }
 
 pub(crate) fn nz_pow_mod<const L: usize, const R: usize>(
@@ -64,10 +55,7 @@ where
     x.div_rem(&m.resize().to_nz().unwrap()).1.resize()
 }
 
-pub(crate) fn wider_rem<const D: usize, const S: usize, const H: usize>(
-    x: &Uint<D>,
-    m: &NonZero<Uint<H>>,
-) -> Uint<H>
+pub(crate) fn wider_rem<const D: usize, const S: usize, const H: usize>(x: &Uint<D>, m: &NonZero<Uint<H>>) -> Uint<H>
 where
     Uint<D>: Split<Output = Uint<S>>,
     Uint<S>: Split<Output = Uint<H>> + Concat<Output = Uint<D>>,

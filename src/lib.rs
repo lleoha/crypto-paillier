@@ -7,17 +7,13 @@ mod utils;
 
 pub use pk::PublicKey as PaillierPublicKey;
 pub use sk::SecretKey as PaillierSecretKey;
-pub use traits::HomomorphicEncryptionKey;
-pub use traits::{DecryptionKey, EncryptionKey};
+pub use traits::{DecryptionKey, EncryptionKey, HomomorphicKey, Key, KeyGenerator, OpeningKey};
 
-pub type PaillierSecretKey2048 =
-    PaillierSecretKey<{ U1024::LIMBS }, { U2048::LIMBS }, { U4096::LIMBS }>;
+pub type PaillierSecretKey2048 = PaillierSecretKey<{ U1024::LIMBS }, { U2048::LIMBS }, { U4096::LIMBS }>;
 pub type PaillierPublicKey2048 = PaillierPublicKey<{ U2048::LIMBS }, { U4096::LIMBS }>;
 
-pub type PaillierSecretKey3072 =
-    PaillierSecretKey<{ U1536::LIMBS }, { U3072::LIMBS }, { U6144::LIMBS }>;
+pub type PaillierSecretKey3072 = PaillierSecretKey<{ U1536::LIMBS }, { U3072::LIMBS }, { U6144::LIMBS }>;
 pub type PaillierPublicKey3072 = PaillierPublicKey<{ U3072::LIMBS }, { U6144::LIMBS }>;
 
-pub type PaillierSecretKey4096 =
-    PaillierSecretKey<{ U2048::LIMBS }, { U4096::LIMBS }, { U8192::LIMBS }>;
+pub type PaillierSecretKey4096 = PaillierSecretKey<{ U2048::LIMBS }, { U4096::LIMBS }, { U8192::LIMBS }>;
 pub type PaillierPublicKey4096 = PaillierPublicKey<{ U4096::LIMBS }, { U8192::LIMBS }>;

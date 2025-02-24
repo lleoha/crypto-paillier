@@ -1,58 +1,53 @@
 use crate::pk::PublicKey;
-use crate::traits::HomomorphicEncryptionKey;
+use crate::traits::HomomorphicKey;
 use crate::utils::nz_mul_mod;
 use crypto_bigint::modular::{MontyForm, SafeGcdInverter};
 use crypto_bigint::{Concat, NonZero, Odd, PrecomputeInverter, Split, Uint};
+use subtle::{Choice, ConstantTimeEq, ConstantTimeLess};
 
-impl<const S: usize, const S_UNSAT: usize, const D: usize, const D_UNSAT: usize, const Q: usize>
-    HomomorphicEncryptionKey<Uint<S>> for PublicKey<S, D>
+impl<const S: usize, const S_UNSAT: usize, const D: usize, const D_UNSAT: usize, const Q: usize> HomomorphicKey<Uint<S>>
+    for PublicKey<S, D>
 where
     Uint<S>: Concat<Output = Uint<D>>,
     Odd<Uint<S>>: PrecomputeInverter<Inverter = SafeGcdInverter<S, S_UNSAT>>,
-    Uint<D>: Split<Output = Uint<S>> + Concat<Output = Uint<Q>>,
+    Uint<D>: Concat<Output = Uint<Q>> + Split<Output = Uint<S>>,
     Odd<Uint<D>>: PrecomputeInverter<Inverter = SafeGcdInverter<D, D_UNSAT>>,
     Uint<Q>: Split<Output = Uint<D>>,
 {
     type Scalar = Uint<S>;
 
+    fn scalar_is_valid(&self, s: &Self::Scalar) -> Choice {
+        s.ct_lt(&self.n)
+    }
+
+    fn scalar_eq(&self, sl: &Self::Scalar, sr: &Self::Scalar) -> Choice {
+        self.scalar_is_valid(sl) & self.scalar_is_valid(sr) & sl.ct_eq(sr)
+    }
+
     fn ciphertext_add(&self, cl: &Self::Ciphertext, cr: &Self::Ciphertext) -> Self::Ciphertext {
-        nz_mul_mod(
-            cl,
-            cr,
-            self.precomputation.nn_monty_params.modulus().as_nz_ref(),
-        )
+        nz_mul_mod(cl, cr, self.precomputation.nn_monty_params.modulus().as_nz_ref())
     }
 
     fn ciphertext_add_plain(&self, c: &Self::Ciphertext, m: &Uint<S>) -> Self::Ciphertext {
         let g_to_m = NonZero::new(self.n.widening_mul(m) + Uint::ONE).unwrap();
-        nz_mul_mod(
-            c,
-            &g_to_m,
-            self.precomputation.nn_monty_params.modulus().as_nz_ref(),
-        )
+        nz_mul_mod(c, &g_to_m, self.precomputation.nn_monty_params.modulus().as_nz_ref())
     }
 
     fn ciphertext_sub(&self, cl: &Self::Ciphertext, cr: &Self::Ciphertext) -> Self::Ciphertext {
         let cr_inv = cr
             .inv_odd_mod(self.precomputation.nn_monty_params.modulus())
             .expect("c is invertible");
-        cl.mul_mod(
-            &cr_inv,
-            self.precomputation.nn_monty_params.modulus().as_nz_ref(),
-        )
-        .to_nz()
-        .expect("c is non zero")
+        cl.mul_mod(&cr_inv, self.precomputation.nn_monty_params.modulus().as_nz_ref())
+            .to_nz()
+            .expect("c is non zero")
     }
 
     fn ciphertext_sub_plain(&self, c: &Self::Ciphertext, m: &Uint<S>) -> Self::Ciphertext {
         let m_neg = self.n.wrapping_sub(m);
         let g_to_m = self.n.widening_mul(&m_neg) + Uint::ONE;
-        c.mul_mod(
-            &g_to_m,
-            self.precomputation.nn_monty_params.modulus().as_nz_ref(),
-        )
-        .to_nz()
-        .expect("c is non zero")
+        c.mul_mod(&g_to_m, self.precomputation.nn_monty_params.modulus().as_nz_ref())
+            .to_nz()
+            .expect("c is non zero")
     }
 
     fn ciphertext_neg(&self, c: &Self::Ciphertext) -> Self::Ciphertext {
@@ -64,24 +59,16 @@ where
 
     fn ciphertext_mul_scalar(&self, c: &Self::Ciphertext, s: &Self::Scalar) -> Self::Ciphertext {
         let c_monty_form = MontyForm::new(c, self.precomputation.nn_monty_params);
-        c_monty_form
-            .pow(s)
-            .retrieve()
-            .to_nz()
-            .expect("c is non zero")
+        c_monty_form.pow(s).retrieve().to_nz().expect("c is non zero")
     }
 
     fn nonce_add(&self, rl: &Self::Nonce, rr: &Self::Nonce) -> Self::Nonce {
-        rl.mul_mod(rr, self.n.as_nz_ref())
-            .to_nz()
-            .expect("r is non zero")
+        rl.mul_mod(rr, self.n.as_nz_ref()).to_nz().expect("r is non zero")
     }
 
     fn nonce_sub(&self, rl: &Self::Nonce, rr: &Self::Nonce) -> Self::Nonce {
         let rr_inv = rr.inv_odd_mod(&self.n).expect("r is invertible");
-        rl.mul_mod(&rr_inv, self.n.as_nz_ref())
-            .to_nz()
-            .expect("r is non zero")
+        rl.mul_mod(&rr_inv, self.n.as_nz_ref()).to_nz().expect("r is non zero")
     }
 
     fn nonce_neg(&self, r: &Self::Nonce) -> Self::Nonce {
@@ -93,27 +80,22 @@ where
 
     fn nonce_mul_scalar(&self, r: &Self::Nonce, s: &Self::Scalar) -> Self::Nonce {
         let r_monty_form = MontyForm::new(r, self.precomputation.n_monty_params);
-        r_monty_form
-            .pow(s)
-            .retrieve()
-            .to_nz()
-            .expect("r is non zero")
+        r_monty_form.pow(s).retrieve().to_nz().expect("r is non zero")
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::HomomorphicEncryptionKey;
-    use crate::{DecryptionKey, EncryptionKey, PaillierSecretKey2048};
-    use crypto_bigint::rand_core::SeedableRng;
+    use crate::traits::HomomorphicKey;
+    use crate::{EncryptionKey, KeyGenerator, OpeningKey, PaillierSecretKey2048};
     use crypto_bigint::{RandomMod, Uint};
     use rand_chacha::ChaCha8Rng;
+    use rand_core::SeedableRng;
 
     #[test]
     fn should_homomorphic_add() {
-        let mut rng = ChaCha8Rng::from_entropy();
-        let sk = PaillierSecretKey2048::random(&mut rng);
-        let pk = sk.as_public_key();
+        let mut rng = ChaCha8Rng::from_os_rng();
+        let (sk, pk) = PaillierSecretKey2048::random(&mut rng);
 
         let m1 = pk.random_plaintext(&mut rng);
         let m2 = pk.random_plaintext(&mut rng);
@@ -131,9 +113,8 @@ mod tests {
 
     #[test]
     fn should_homomorphic_add_plain() {
-        let mut rng = ChaCha8Rng::from_entropy();
-        let sk = PaillierSecretKey2048::random(&mut rng);
-        let pk = sk.as_public_key();
+        let mut rng = ChaCha8Rng::from_os_rng();
+        let (sk, pk) = PaillierSecretKey2048::random(&mut rng);
 
         let m1 = pk.random_plaintext(&mut rng);
         let m2 = pk.random_plaintext(&mut rng);
@@ -149,9 +130,8 @@ mod tests {
 
     #[test]
     fn should_homomorphic_sub() {
-        let mut rng = ChaCha8Rng::from_entropy();
-        let sk = PaillierSecretKey2048::random(&mut rng);
-        let pk = sk.as_public_key();
+        let mut rng = ChaCha8Rng::from_os_rng();
+        let (sk, pk) = PaillierSecretKey2048::random(&mut rng);
 
         let m1 = pk.random_plaintext(&mut rng);
         let m2 = pk.random_plaintext(&mut rng);
@@ -169,9 +149,8 @@ mod tests {
 
     #[test]
     fn should_homomorphic_sub_plain() {
-        let mut rng = ChaCha8Rng::from_entropy();
-        let sk = PaillierSecretKey2048::random(&mut rng);
-        let pk = sk.as_public_key();
+        let mut rng = ChaCha8Rng::from_os_rng();
+        let (sk, pk) = PaillierSecretKey2048::random(&mut rng);
 
         let m1 = pk.random_plaintext(&mut rng);
         let m2 = pk.random_plaintext(&mut rng);
@@ -187,9 +166,8 @@ mod tests {
 
     #[test]
     fn should_homomorphic_neg() {
-        let mut rng = ChaCha8Rng::from_entropy();
-        let sk = PaillierSecretKey2048::random(&mut rng);
-        let pk = sk.as_public_key();
+        let mut rng = ChaCha8Rng::from_os_rng();
+        let (sk, pk) = PaillierSecretKey2048::random(&mut rng);
 
         let m1 = pk.random_plaintext(&mut rng);
         let m = m1.neg_mod(pk.n.as_nz_ref());
@@ -205,9 +183,8 @@ mod tests {
 
     #[test]
     fn should_homomorphic_mul_scalar() {
-        let mut rng = ChaCha8Rng::from_entropy();
-        let sk = PaillierSecretKey2048::random(&mut rng);
-        let pk = sk.as_public_key();
+        let mut rng = ChaCha8Rng::from_os_rng();
+        let (sk, pk) = PaillierSecretKey2048::random(&mut rng);
 
         let m1 = pk.random_plaintext(&mut rng);
         let s = Uint::random_mod(&mut rng, pk.n.as_nz_ref());

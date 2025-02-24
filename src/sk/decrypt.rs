@@ -1,11 +1,11 @@
 use crate::sk::SecretKey;
-use crate::traits::DecryptionKey;
+use crate::traits::{DecryptionKey, Key, OpeningKey};
 use crate::utils::{wide_div, wide_rem, wider_rem};
 use crypto_bigint::modular::{MontyForm, SafeGcdInverter};
 use crypto_bigint::{Concat, NonZero, Odd, PrecomputeInverter, Split, Uint};
+use subtle::Choice;
 
-impl<const H: usize, const H_UNSAT: usize, const S: usize, const D: usize, const Q: usize>
-    SecretKey<H, S, D>
+impl<const H: usize, const H_UNSAT: usize, const S: usize, const D: usize, const Q: usize> SecretKey<H, S, D>
 where
     Uint<H>: Concat<Output = Uint<S>>,
     Odd<Uint<H>>: PrecomputeInverter<Inverter = SafeGcdInverter<H, H_UNSAT>>,
@@ -42,18 +42,61 @@ where
     }
 }
 
-impl<const H: usize, const H_UNSAT: usize, const S: usize, const D: usize, const Q: usize>
-    DecryptionKey<Uint<S>> for SecretKey<H, S, D>
+impl<const H: usize, const S: usize, const S_UNSAT: usize, const D: usize, const D_UNSAT: usize> Key<Uint<S>>
+    for SecretKey<H, S, D>
 where
     Uint<H>: Concat<Output = Uint<S>>,
-    Odd<Uint<H>>: PrecomputeInverter<Inverter = SafeGcdInverter<H, H_UNSAT>>,
-    Uint<S>: Split<Output = Uint<H>> + Concat<Output = Uint<D>>,
-    Uint<D>: Split<Output = Uint<S>> + Concat<Output = Uint<Q>>,
-    Uint<Q>: Split<Output = Uint<D>>,
+    Uint<S>: Concat<Output = Uint<D>> + Split<Output = Uint<H>>,
+    Odd<Uint<S>>: PrecomputeInverter<Inverter = SafeGcdInverter<S, S_UNSAT>>,
+    Uint<D>: Split<Output = Uint<S>>,
+    Odd<Uint<D>>: PrecomputeInverter<Inverter = SafeGcdInverter<D, D_UNSAT>>,
 {
     type Ciphertext = NonZero<Uint<D>>;
     type Nonce = NonZero<Uint<S>>;
 
+    fn plaintext_is_valid(&self, plaintext: &Uint<S>) -> Choice {
+        self.pk.plaintext_is_valid(plaintext)
+    }
+
+    fn plaintext_eq(&self, plaintext_lhs: &Uint<S>, plaintext_rhs: &Uint<S>) -> Choice {
+        self.pk.plaintext_eq(plaintext_lhs, plaintext_rhs)
+    }
+
+    fn ciphertext_is_valid(&self, ciphertext: &Self::Ciphertext) -> Choice {
+        self.pk.ciphertext_is_valid(ciphertext)
+    }
+
+    fn ciphertext_eq(&self, ciphertext_lhs: &Self::Ciphertext, ciphertext_rhs: &Self::Ciphertext) -> Choice {
+        self.pk.ciphertext_eq(ciphertext_lhs, ciphertext_rhs)
+    }
+
+    fn nonce_is_valid(&self, nonce: &Self::Nonce) -> Choice {
+        self.pk.nonce_is_valid(nonce)
+    }
+
+    fn nonce_eq(&self, nonce_lhs: &Self::Nonce, nonce_rhs: &Self::Nonce) -> Choice {
+        self.pk.nonce_eq(nonce_lhs, nonce_rhs)
+    }
+}
+
+impl<
+    const H: usize,
+    const H_UNSAT: usize,
+    const S: usize,
+    const S_UNSAT: usize,
+    const D: usize,
+    const D_UNSAT: usize,
+    const Q: usize,
+> DecryptionKey<Uint<S>> for SecretKey<H, S, D>
+where
+    Uint<H>: Concat<Output = Uint<S>>,
+    Odd<Uint<H>>: PrecomputeInverter<Inverter = SafeGcdInverter<H, H_UNSAT>>,
+    Uint<S>: Split<Output = Uint<H>> + Concat<Output = Uint<D>>,
+    Odd<Uint<S>>: PrecomputeInverter<Inverter = SafeGcdInverter<S, S_UNSAT>>,
+    Uint<D>: Split<Output = Uint<S>> + Concat<Output = Uint<Q>>,
+    Odd<Uint<D>>: PrecomputeInverter<Inverter = SafeGcdInverter<D, D_UNSAT>>,
+    Uint<Q>: Split<Output = Uint<D>>,
+{
     fn decrypt(&self, c: &Self::Ciphertext) -> Uint<S> {
         let lp = self.fermat_quotient_p(c);
         let mp = lp.mul_mod(&self.precomputation.hp, self.p.as_nz_ref());
@@ -62,7 +105,26 @@ where
 
         self.crt(&mp, &mq)
     }
+}
 
+impl<
+    const H: usize,
+    const H_UNSAT: usize,
+    const S: usize,
+    const S_UNSAT: usize,
+    const D: usize,
+    const D_UNSAT: usize,
+    const Q: usize,
+> OpeningKey<Uint<S>> for SecretKey<H, S, D>
+where
+    Uint<H>: Concat<Output = Uint<S>>,
+    Odd<Uint<H>>: PrecomputeInverter<Inverter = SafeGcdInverter<H, H_UNSAT>>,
+    Uint<S>: Split<Output = Uint<H>> + Concat<Output = Uint<D>>,
+    Odd<Uint<S>>: PrecomputeInverter<Inverter = SafeGcdInverter<S, S_UNSAT>>,
+    Uint<D>: Split<Output = Uint<S>> + Concat<Output = Uint<Q>>,
+    Odd<Uint<D>>: PrecomputeInverter<Inverter = SafeGcdInverter<D, D_UNSAT>>,
+    Uint<Q>: Split<Output = Uint<D>>,
+{
     fn open(&self, c: &Self::Ciphertext) -> (Uint<S>, Self::Nonce) {
         let cp_reduced = wider_rem(c.as_ref(), self.p.as_nz_ref());
         let cp_monty_form = MontyForm::new(&cp_reduced, self.precomputation.p_monty_params);
@@ -81,15 +143,16 @@ where
 
 #[cfg(test)]
 mod tests {
+    use crate::EncryptionKey;
     use crate::PaillierSecretKey4096;
-    use crate::{DecryptionKey, EncryptionKey};
+    use crate::traits::OpeningKey;
     use crypto_bigint::{U2048, U4096};
     use rand_chacha::ChaCha8Rng;
     use rand_chacha::rand_core::SeedableRng;
 
     #[test]
     fn should_decrypt() {
-        let mut rng = ChaCha8Rng::from_entropy();
+        let mut rng = ChaCha8Rng::from_os_rng();
 
         let p = U2048::from_be_hex("b15323be74f87cbf9a8abd8d24ccf5ae67e96dafe0a8030f83b7a1fbb2c664191a7667dea5dff9130f25f71ca3af40aaf27cbd196493760a29be84b6b757532543989a9580de7eadb8437bd2f88e4a501224948e5d522c8e6dac3fc50bda19233e5d01954fa67909706583952b2693a487d65b6fbc7a1f953501c09f7aef44db2a8698d06d18c41473ebc3cdadc08b6bc38a0c7e0e280277c90048aab8566c4606717d54564e519437e1e18557a76a34831c132f3b3f225852cd0d7f2ed7371ebdf947e73c5041ea23874302507a4dd84e3bfc9636182bdd75931ce050d7cc88883b6b3831b408af3c64eecf192ada2b265cb07da8c7e8c5dd46c3c633162e19").to_odd().unwrap();
         let q = U2048::from_be_hex("8d97ae14c81df11cdea81c4b9c2579a8e161e71ac5df7d6d4a8340edc8db44ad16b15f62c45df91906e33cd1afb845d4217cd37fd69e3d9c1d7f7eeee93953b61a299925d34806725a2ddf0f0e7a39888d1b6dc291d59b1d86b9be209a486d810fe3c59d3619d8f4c73994d3a4ebac52efabcce73aaaa263603797929bf11dc71ce740c878406009d60950e75db2cc741083afa4831ad4bdc79f6528bd808169f5763790a43df217cc3ec159717d11f82481d7dd864f082de499405522c24f340b52b39366a5d6d6714303338f26345bb58dab33974fc014bd14e35acabf815efcae58737ca60ff9f27c219906bacb98b9ae47a7fb64c7c59c7df254f5243175").to_odd().unwrap();
